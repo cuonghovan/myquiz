@@ -1,0 +1,167 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: hovancuong
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: myquiz
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: myquiz
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  httpApi:
+    authorizers:
+      cognitoAuthorizer:
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+        audience:
+          - !Ref UserClient
+    cors: true
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:PutItem"
+        - "dynamodb:GetItem"
+        - "dynamodb:UpdateItem"
+        - "dynamodb:Scan"
+      Resource:
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/Participants"
+        - "arn:aws:dynamodb:${self:provider.region}:*:table/Quizzes"
+    - Effect: Allow
+      Action:
+        - cognito-idp:AdminInitiateAuth
+        - cognito-idp:AdminCreateUser
+        - cognito-idp:AdminSetUserPassword
+      Resource: "*"
+
+functions:
+  joinQuiz:
+    handler: handler.joinQuiz
+    events:
+      - httpApi:
+          method: POST
+          path: /quiz/join
+          authorizer:
+            name: cognitoAuthorizer
+
+  submitAnswer:
+    handler: handler.submitAnswer
+    events:
+      - httpApi:
+          method: POST
+          path: /quiz/submit
+          authorizer:
+            name: cognitoAuthorizer
+
+  getParticipants:
+    handler: handler.getParticipants
+    events:
+      - httpApi:
+          method: POST
+          path: /quiz/leaderboard
+          authorizer:
+            name: cognitoAuthorizer
+
+resources:
+  Resources:
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: myquiz-user-pool
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireLowercase: true
+            RequireUppercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+            TemporaryPasswordValidityDays: 7
+        AutoVerifiedAttributes: ["email"]
+        AdminCreateUserConfig:
+          AllowAdminCreateUserOnly: false
+        UsernameAttributes:
+          - email
+        UserPoolAddOns:
+          AdvancedSecurityMode: ENFORCED
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+        EmailConfiguration:
+          EmailSendingAccount: COGNITO_DEFAULT
+        VerificationMessageTemplate:
+          DefaultEmailOption: CONFIRM_WITH_CODE
+          EmailMessage: "Your verification code is {####}"
+          EmailSubject: "Your verification code"
+
+    UserPoolDomain:
+      Type: AWS::Cognito::UserPoolDomain
+      Properties:
+        Domain: cuonghv-quiz-app
+        UserPoolId: !Ref UserPool
+
+    UserClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: myquiz-user-pool-ui
+        GenerateSecret: false
+        UserPoolId: { Ref: UserPool }
+        AccessTokenValidity: 5
+        IdTokenValidity: 5
+        ExplicitAuthFlows:
+          - "ALLOW_CUSTOM_AUTH"
+          - "ALLOW_USER_SRP_AUTH"
+          - "ALLOW_REFRESH_TOKEN_AUTH"
+        SupportedIdentityProviders:
+          - COGNITO
+        CallbackURLs:
+          - http://localhost:5173
+        LogoutURLs:
+          - http://localhost:5173
+        AllowedOAuthFlows:
+          - code
+          - implicit
+        AllowedOAuthScopes:
+          - email
+          - openid
+          - phone
+          - profile
+        AllowedOAuthFlowsUserPoolClient: true
+        PreventUserExistenceErrors: ENABLED
+
+    ParticipantsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Participants
+        AttributeDefinitions:
+          - AttributeName: "ParticipantID"
+            AttributeType: "S"
+          - AttributeName: "QuizID"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "ParticipantID"
+            KeyType: "HASH"
+          - AttributeName: "QuizID"
+            KeyType: "RANGE"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+
+    QuizzesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Quizzes
+        AttributeDefinitions:
+          - AttributeName: "QuizID"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "QuizID"
+            KeyType: "HASH"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
