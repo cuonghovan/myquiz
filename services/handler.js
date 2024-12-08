@@ -5,7 +5,23 @@ exports.joinQuiz = async (event) => {
   const { quizId, userId } = JSON.parse(event.body);
   const participantId = `${userId}#${quizId}`;
 
-  // Logic to add participant to the Participants table
+  // Check if quiz exists
+  const quizParams = {
+    TableName: 'Quizzes',
+    Key: {
+      QuizID: quizId
+    }
+  };
+
+  const quizResult = await dynamoDb.get(quizParams).promise();
+  if (!quizResult.Item) {
+    return {
+      statusCode: 404,
+      body: JSON.stringify({ message: 'Quiz not found' })
+    };
+  }
+
+  // Add participant to the Participants table
   const params = {
     TableName: 'Participants',
     Item: {

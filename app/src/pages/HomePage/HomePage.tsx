@@ -24,12 +24,23 @@ export const HomePage = () => {
                 userId: auth.user?.profile.sub
             }),
         })
-            .then(response => response.text())
+            .then(response => {
+                if (response.status === 200) {
+                    return response.json();
+                } else {
+                    return response.json().then(err => {
+                        throw new Error(err.message || 'Something went wrong');
+                    });
+                }
+            })
             .then(result => {
                 console.log(result);
                 navigate(`/quiz/${quizId}`);
             })
-            .catch(error => console.log('error', error));
+            .catch(error => {
+                alert(error.message);
+                console.log('error', error);
+            });
     }
 
     return (
