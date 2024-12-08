@@ -37,3 +37,6 @@
 
 ### Part 2: Implementation
   - Real-time Quiz Participation: Users should be able to join a quiz session using a unique quiz ID.
+
+### Part 3: Video
+https://drive.google.com/file/d/1EUogI-u66n1TngxVQ2PF-qF9WrrBMRFI/view?usp=sharing
